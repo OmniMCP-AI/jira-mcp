@@ -1,0 +1,10 @@
+src/
+scripts/
+test/
+*.log
+tsconfig.json
+.vscode/
+.git/
+node_modules/
+package-lock.json
+QUICKSTART.md 
