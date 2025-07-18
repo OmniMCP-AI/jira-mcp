@@ -200,28 +200,28 @@ export class JiraMcpServer implements IJiraMcpServer {
   /**
    * Handle initialization errors with appropriate messaging
    */
-  private handleInitializationError(error: unknown): never {
+  private handleInitializationError(error: unknown): void {
     if (error instanceof JiraValidationError) {
       console.error(`Configuration error: ${error.message}`);
       console.error('Please check your environment variables and try again.');
       console.error('Required variables: JIRA_HOST and authentication credentials');
-      process.exit(1);
+      // process.exit(1);
     }
 
     if (error instanceof JiraAuthenticationError) {
       console.error(`Authentication error: ${error.message}`);
       console.error('Please verify your Jira credentials.');
-      process.exit(1);
+      // process.exit(1);
     }
 
     if (error instanceof JiraConnectionError) {
       console.error(`Connection error: ${error.message}`);
       console.error('Please check your Jira host and network connectivity.');
-      process.exit(1);
+      // process.exit(1);
     }
 
     console.error(`Unexpected error during initialization: ${error}`);
-    process.exit(1);
+    // process.exit(1);
   }
 }
 
