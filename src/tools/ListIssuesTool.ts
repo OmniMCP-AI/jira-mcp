@@ -9,7 +9,7 @@ import { ListIssuesParams, JiraSearchResult } from '../types/index.js';
 
 export interface IListIssuesTool {
   getDefinition(): Tool;
-  execute(args: any): Promise<JiraSearchResult>;
+  execute(args: any, headers?: any): Promise<JiraSearchResult>;
 }
 
 export class ListIssuesTool implements IListIssuesTool {

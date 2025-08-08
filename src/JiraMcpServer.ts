@@ -5,6 +5,7 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport, StreamableHTTPServerTransportOptions } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema
@@ -21,6 +22,7 @@ import {
   JiraAuthenticationError,
   JiraValidationError
 } from './types/index.js';
+import http from "http";
 
 export interface IJiraMcpServer {
   start(): Promise<void>;
@@ -59,10 +61,57 @@ export class JiraMcpServer implements IJiraMcpServer {
    */
   public async start(): Promise<void> {
     try {
-      await this.initializeServer();
-      
-      const transport = new StdioServerTransport();
+      // await this.initializeServer();
+
+      const port = parseInt(process.env.PORT || '3333');
+      const options: StreamableHTTPServerTransportOptions = {
+        sessionIdGenerator: undefined
+      }
+      const transport = new StreamableHTTPServerTransport(options);
       await this.server.connect(transport);
+
+      // Create HTTP server to handle requests
+      const httpServer = http.createServer((req, res) => {
+        if (req.method === 'POST' && req.url === '/mcp') {
+          let body = '';
+          req.on('data', chunk => {
+            body += chunk.toString();
+          });
+          req.on('end', async () => {
+            try {
+              res.setHeader('Content-Type', 'application/json');
+              res.setHeader('Access-Control-Allow-Origin', '*');
+              res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+              res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+              if (req.method === 'OPTIONS') {
+                res.writeHead(200);
+                res.end();
+                return;
+              }
+
+              await transport.handleRequest(req, res, JSON.parse(body));
+            } catch (error) {
+              console.error('HTTP request error:', error);
+              res.writeHead(500);
+              res.end(JSON.stringify({ error: 'Internal server error' }));
+            }
+          });
+        } else if (req.method === 'OPTIONS') {
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+          res.writeHead(200);
+          res.end();
+        } else {
+          res.writeHead(400);
+          res.end('Not Found');
+        }
+      });
+
+      httpServer.listen(port, () => {
+        console.error(`Twitter MCP server running on HTTP port ${port}`);
+      });
       
       console.error('Jira MCP Server started successfully');
     } catch (error) {
@@ -87,14 +136,24 @@ export class JiraMcpServer implements IJiraMcpServer {
   /**
    * Initialize server components
    */
-  private async initializeServer(): Promise<void> {
-    if (this.isInitialized) {
-      return;
-    }
+  private async initializeServer(headers:any ): Promise<void> {
+    // if (this.isInitialized) {
+    //   return;
+    // }
 
     try {
       // Load configuration
-      const config = this.configManager.loadConfiguration();
+      // const config = this.configManager.loadConfiguration();
+      const config: JiraConfig = {
+        host: headers?.jira_host,
+        protocol: 'https',
+        apiVersion: '2',
+        auth:{
+          type: 'basic',
+          username: headers?.jira_username,
+          password: headers?.jira_password
+        }
+      }
       console.error(`Connecting to Jira at ${config.protocol}://${config.host}`);
 
       // Initialize Jira client
@@ -106,7 +165,7 @@ export class JiraMcpServer implements IJiraMcpServer {
       this.createIssueTool = new CreateIssueTool(this.jiraClient);
       this.addCommentTool = new AddCommentTool(this.jiraClient);
 
-      this.isInitialized = true;
+      // this.isInitialized = true;
       console.error('Jira MCP Server initialized successfully');
     } catch (error) {
       this.handleInitializationError(error);
@@ -118,10 +177,12 @@ export class JiraMcpServer implements IJiraMcpServer {
    */
   private setupEventHandlers(): void {
     // Handle list tools request
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      if (!this.isInitialized) {
-        await this.initializeServer();
-      }
+    this.server.setRequestHandler(ListToolsRequestSchema, async (request, extra) => {
+      const headers = extra?.requestInfo?.headers
+      console.log("Header ==>", headers)
+
+      await this.initializeServer(headers);
+
 
       return {
         tools: [
@@ -133,10 +194,12 @@ export class JiraMcpServer implements IJiraMcpServer {
     });
 
     // Handle tool calls
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      if (!this.isInitialized) {
-        await this.initializeServer();
-      }
+    this.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+      const headers = extra?.requestInfo?.headers
+      console.log("Header ==>", headers)
+
+      await this.initializeServer(headers);
+
 
       const { name, arguments: args } = request.params;
 
